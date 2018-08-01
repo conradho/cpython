@@ -72,6 +72,7 @@ import email.parser
 import email.message
 import http
 import io
+import logging
 import re
 import socket
 import collections.abc
@@ -143,6 +144,9 @@ _is_illegal_header_value = re.compile(rb'\n(?![ \t])|\r(?![ \t\n])').search
 # We always set the Content-Length header for these methods because some
 # servers will otherwise respond with a 411
 _METHODS_EXPECTING_BODY = {'PATCH', 'POST', 'PUT'}
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _encode(data, name='data'):
@@ -257,8 +261,7 @@ class HTTPResponse(io.BufferedIOBase):
         line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
         if len(line) > _MAXLINE:
             raise LineTooLong("status line")
-        if self.debuglevel > 0:
-            print("reply:", repr(line))
+        LOGGER.debug(f"reply: {line!r}")
         if not line:
             # Presumably, the server closed the connection before
             # sending a valid response.
@@ -304,8 +307,7 @@ class HTTPResponse(io.BufferedIOBase):
                 skip = skip.strip()
                 if not skip:
                     break
-                if self.debuglevel > 0:
-                    print("header:", skip)
+                LOGGER.debug(f"header: {skip}")
 
         self.code = self.status = status
         self.reason = reason.strip()
@@ -319,9 +321,8 @@ class HTTPResponse(io.BufferedIOBase):
 
         self.headers = self.msg = parse_headers(self.fp)
 
-        if self.debuglevel > 0:
-            for hdr in self.headers:
-                print("header:", hdr + ":", self.headers.get(hdr))
+        for hdr in self.headers:
+            LOGGER.debug(f"header: {hdr}: {self.headers.get(hdr)}")
 
         # are we using the chunked-style of transfer encoding?
         tr_enc = self.headers.get("transfer-encoding")
@@ -339,7 +340,7 @@ class HTTPResponse(io.BufferedIOBase):
         self.length = None
         length = self.headers.get("content-length")
 
-         # are we using the chunked-style of transfer encoding?
+        # are we using the chunked-style of transfer encoding?
         tr_enc = self.headers.get("transfer-encoding")
         if length and not self.chunked:
             try:
@@ -919,8 +920,7 @@ class HTTPConnection:
             if line in (b'\r\n', b'\n', b''):
                 break
 
-            if self.debuglevel > 0:
-                print('header:', line.decode())
+            LOGGER.debug("header: " + line.decode())
 
     def connect(self):
         """Connect to the host and port specified in __init__."""
@@ -957,14 +957,12 @@ class HTTPConnection:
             else:
                 raise NotConnected()
 
-        if self.debuglevel > 0:
-            print("send:", repr(data))
+        LOGGER.debug(f"send: {data!r}")
         if hasattr(data, "read") :
-            if self.debuglevel > 0:
-                print("sendIng a read()able")
+            LOGGER.debug("sendIng a read()able")
             encode = self._is_textIO(data)
-            if encode and self.debuglevel > 0:
-                print("encoding file using iso-8859-1")
+            if encode:
+                LOGGER.debug("encoding file using iso-8859-1")
             while 1:
                 datablock = data.read(self.blocksize)
                 if not datablock:
@@ -991,11 +989,10 @@ class HTTPConnection:
         self._buffer.append(s)
 
     def _read_readable(self, readable):
-        if self.debuglevel > 0:
-            print("sendIng a read()able")
+        LOGGER.debug("sendIng a read()able")
         encode = self._is_textIO(readable)
-        if encode and self.debuglevel > 0:
-            print("encoding file using iso-8859-1")
+        if encode:
+            LOGGER.debug("encoding file using iso-8859-1")
         while True:
             datablock = readable.read(self.blocksize)
             if not datablock:
@@ -1044,8 +1041,7 @@ class HTTPConnection:
 
             for chunk in chunks:
                 if not chunk:
-                    if self.debuglevel > 0:
-                        print('Zero length chunk ignored')
+                    # LOGGER.debug("Zero length chunk ignored")
                     continue
 
                 if encode_chunked and self._http_vsn == 11:
@@ -1257,8 +1253,7 @@ class HTTPConnection:
                 content_length = self._get_content_length(body, method)
                 if content_length is None:
                     if body is not None:
-                        if self.debuglevel > 0:
-                            print('Unable to determine size of %r' % body)
+                        LOGGER.debug(f"Unable to determine size of {body!r}")
                         encode_chunked = True
                         self.putheader('Transfer-Encoding', 'chunked')
                 else:

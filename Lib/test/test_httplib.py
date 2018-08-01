@@ -8,7 +8,7 @@ import socket
 import threading
 
 import unittest
-TestCase = unittest.TestCase
+from unittest import mock, TestCase
 
 from test import support
 
@@ -344,7 +344,8 @@ class HeaderTests(TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid header'):
                     conn.putheader(name, value)
 
-    def test_headers_debuglevel(self):
+    @mock.patch('http.client.LOGGER')
+    def test_headers_debuglevel(self, m_log):
         body = (
             b'HTTP/1.1 200 OK\r\n'
             b'First: val\r\n'
@@ -352,12 +353,15 @@ class HeaderTests(TestCase):
         )
         sock = FakeSocket(body)
         resp = client.HTTPResponse(sock, debuglevel=1)
-        with support.captured_stdout() as output:
-            resp.begin()
-        lines = output.getvalue().splitlines()
-        self.assertEqual(lines[0], "reply: 'HTTP/1.1 200 OK\\r\\n'")
-        self.assertEqual(lines[1], "header: First: val")
-        self.assertEqual(lines[2], "header: Second: val")
+        resp.begin()
+        self.assertEqual(
+            m_log.debug.call_args_list,
+            [
+                mock.call("reply: 'HTTP/1.1 200 OK\\r\\n'"),
+                mock.call("header: First: val"),
+                mock.call("header: Second: val")
+            ]
+        )
 
 
 class TransferEncodingTest(TestCase):
@@ -1920,7 +1924,8 @@ class TunnelTests(TestCase):
         self.assertIn(b'CONNECT destination.com', self.conn.sock.data)
         self.assertIn(b'Host: destination.com', self.conn.sock.data)
 
-    def test_tunnel_debuglog(self):
+    @mock.patch('http.client.LOGGER')
+    def test_tunnel_debuglog(self, m_log):
         expected_header = 'X-Dummy: 1'
         response_text = 'HTTP/1.0 200 OK\r\n{}\r\n\r\n'.format(expected_header)
 
@@ -1928,10 +1933,11 @@ class TunnelTests(TestCase):
         self.conn._create_connection = self._create_connection(response_text)
         self.conn.set_tunnel('destination.com')
 
-        with support.captured_stdout() as output:
-            self.conn.request('PUT', '/', '')
-        lines = output.getvalue().splitlines()
-        self.assertIn('header: {}'.format(expected_header), lines)
+        self.conn.request('PUT', '/', '')
+        self.assertIn(
+            mock.call('header: {}\r\n'.format(expected_header)),
+            m_log.debug.call_args_list
+        )
 
 
 if __name__ == '__main__':
