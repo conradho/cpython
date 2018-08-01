@@ -1,0 +1,3 @@
+Use logging instead of print debug statements in `http.client`. This also
+means that any code that currently uses a logger with name `http` will see
+additional debug level events. Patch by Conrad Ho
