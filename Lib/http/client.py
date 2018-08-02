@@ -147,6 +147,9 @@ _METHODS_EXPECTING_BODY = {'PATCH', 'POST', 'PUT'}
 
 
 LOGGER = logging.getLogger(__name__)
+def _log_debug(msg):
+    if LOGGER.isEnabledFor(logging.DEBUG):
+        LOGGER.debug(msg)
 
 
 def _encode(data, name='data'):
@@ -261,7 +264,7 @@ class HTTPResponse(io.BufferedIOBase):
         line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
         if len(line) > _MAXLINE:
             raise LineTooLong("status line")
-        LOGGER.debug(f"reply: {line!r}")
+        _log_debug("reply: {!r}".format(line))
         if not line:
             # Presumably, the server closed the connection before
             # sending a valid response.
@@ -307,7 +310,7 @@ class HTTPResponse(io.BufferedIOBase):
                 skip = skip.strip()
                 if not skip:
                     break
-                LOGGER.debug(f"header: {skip}")
+                _log_debug("header: {}".format(skip))
 
         self.code = self.status = status
         self.reason = reason.strip()
@@ -322,7 +325,7 @@ class HTTPResponse(io.BufferedIOBase):
         self.headers = self.msg = parse_headers(self.fp)
 
         for hdr in self.headers:
-            LOGGER.debug(f"header: {hdr}: {self.headers.get(hdr)}")
+            _log_debug("header: {}: {}".format(hdr, self.headers.get(hdr)))
 
         # are we using the chunked-style of transfer encoding?
         tr_enc = self.headers.get("transfer-encoding")
@@ -920,7 +923,7 @@ class HTTPConnection:
             if line in (b'\r\n', b'\n', b''):
                 break
 
-            LOGGER.debug("header: " + line.decode())
+            _log_debug("header: " + line.decode())
 
     def connect(self):
         """Connect to the host and port specified in __init__."""
@@ -957,12 +960,12 @@ class HTTPConnection:
             else:
                 raise NotConnected()
 
-        LOGGER.debug(f"send: {data!r}")
+        _log_debug("send: {!r}".format(data))
         if hasattr(data, "read") :
-            LOGGER.debug("sendIng a read()able")
+            _log_debug("sendIng a read()able")
             encode = self._is_textIO(data)
             if encode:
-                LOGGER.debug("encoding file using iso-8859-1")
+                _log_debug("encoding file using iso-8859-1")
             while 1:
                 datablock = data.read(self.blocksize)
                 if not datablock:
@@ -989,10 +992,10 @@ class HTTPConnection:
         self._buffer.append(s)
 
     def _read_readable(self, readable):
-        LOGGER.debug("sendIng a read()able")
+        _log_debug("sendIng a read()able")
         encode = self._is_textIO(readable)
         if encode:
-            LOGGER.debug("encoding file using iso-8859-1")
+            _log_debug("encoding file using iso-8859-1")
         while True:
             datablock = readable.read(self.blocksize)
             if not datablock:
@@ -1041,7 +1044,7 @@ class HTTPConnection:
 
             for chunk in chunks:
                 if not chunk:
-                    # LOGGER.debug("Zero length chunk ignored")
+                    _log_debug("Zero length chunk ignored")
                     continue
 
                 if encode_chunked and self._http_vsn == 11:
@@ -1253,7 +1256,7 @@ class HTTPConnection:
                 content_length = self._get_content_length(body, method)
                 if content_length is None:
                     if body is not None:
-                        LOGGER.debug(f"Unable to determine size of {body!r}")
+                        _log_debug("Unable to determine size of {!r}".format(body))
                         encode_chunked = True
                         self.putheader('Transfer-Encoding', 'chunked')
                 else:
